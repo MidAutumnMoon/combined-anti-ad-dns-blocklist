@@ -1,0 +1,50 @@
+name: Release combined blocklist
+
+on:
+  workflow_dispatch:
+  push:
+  schedule:
+    - cron: "0 1 */7 * *"
+
+env:
+  BLOCKLIST_NAME: "dnscrypt-blocklist.txt"
+  BLOCKLIST_NAME_ZSTD: "dnscrypt-blocklist.txt.zstd"
+
+jobs:
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    defaults:
+      run: { shell: bash }
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup nix
+        uses: MidAutumnMoon/spheti-action/nix@master
+        with:
+          cachix-url: "https://nuirrce.cachix.org/"
+          cachix-pubkey: "nuirrce.cachix.org-1:KQWa6ZfDkMPXeDiUpmyDhNw4CmgybPyeVklmi/1Rtqk="
+
+      - name: Compile blocklist
+        run: |
+          nix run .#compile-blocklist "$BLOCKLIST_NAME"
+          zstd -19 -T0 "$BLOCKLIST_NAME" -o "$BLOCKLIST_NAME_ZSTD"
+
+      - name: Grab date as tag
+        run: |
+          echo "TAG=$( date '+%Y-%m-%d.%H%M%S' )" >> "$GITHUB_ENV"
+
+      # N.B. Remeber to set permission for github token
+      # Settings > Actions > General > Workflow permissions
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" \
+            --latest \
+            --title "$TAG" \
+            "$BLOCKLIST_NAME_ZSTD"
