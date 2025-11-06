@@ -4,14 +4,13 @@ on:
   workflow_dispatch:
   push:
   schedule:
-    - cron: "0 1 */7 * *"
+    - cron: "0 1 */15 * *"
 
 env:
-  BLOCKLIST_NAME: "dnscrypt-blocklist.txt"
-  BLOCKLIST_NAME_ZSTD: "dnscrypt-blocklist.txt.zstd"
+  BLOCKLIST_DNSCRYPT: "blocklist-dnscrypt.txt"
+  BLOCKLIST_UNBOUND: "blocklist-unbound.conf"
 
 jobs:
-
   release:
     name: Release
     runs-on: ubuntu-latest
@@ -19,20 +18,12 @@ jobs:
       run: { shell: bash }
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup nix
-        uses: MidAutumnMoon/spheti-action/nix@master
-        with:
-          cachix-url: "https://nuirrce.cachix.org/"
-          cachix-pubkey: "nuirrce.cachix.org-1:KQWa6ZfDkMPXeDiUpmyDhNw4CmgybPyeVklmi/1Rtqk="
-
       - name: Compile blocklist
         run: |
-          nix run .#compile-blocklist "$BLOCKLIST_NAME"
-          zstd -19 -T0 "$BLOCKLIST_NAME" -o "$BLOCKLIST_NAME_ZSTD"
+          bash compile.bash
 
       - name: Grab date as tag
         run: |
@@ -44,7 +35,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          tar caf - "$BLOCKLIST_DNSCRYPT" "$BLOCKLIST_UNBOUND" \
+            | zstd -T0 -19 -o assets.tar.zst
           gh release create "$TAG" \
             --latest \
             --title "$TAG" \
-            "$BLOCKLIST_NAME_ZSTD"
+            assets.tar.zst
